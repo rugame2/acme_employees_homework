@@ -1,6 +1,6 @@
 from flask_api import app, db
 from flask_api.models import Patient, patient_schema, patients_schema, User, check_password_hash
-from flask import jsonify, request, render_template, redirect, url_for
+from flask import jsonify,request, render_template, redirect, url_for
 
 #Import for Flask Login
 from flask_login import login_required, login_user, current_user, logout_user
@@ -10,15 +10,18 @@ import jwt
 
 from flask_api.forms import UserForm, LoginForm
 
+from flask_api.token_verifiction import token_required
 # Endpoint for ALL patients
 @app.route('/patients/create', methods = ['POST'])
-def create_patient():
-    name = request.json['Olivia_Davies']
-    gender = request.json['F']
-    address = request.json['124 Main Street, Chicago, IL 60606']
-    ssn = request.json['423-65-8754']
-    blood_type = request.json['O+']
-    email = request.json['oliviadavies@gmail.com']                                                                                           
+@token_required
+#Endpoint for creating patients
+def create_patient(current_user_token):
+    name = request.json['full_name']
+    gender = request.json['gender']
+    address = request.json['address']
+    ssn = request.json['ssn']
+    blood_type = request.json['blood_type']
+    email = request.json['email']                                                                                           
 
     patient = Patient(name, gender, address, ssn, blood_type, email)
 
@@ -30,39 +33,41 @@ def create_patient():
 
 # Endpoint for all patient
 @app.route('/patients', methods = ['GET'])
-def get_patients():
+@token_required
+def get_patients(current_user_token):
     patients = Patient.query.all()
     return jsonify(patients_schema.dump(patients))
 
 # Endpoint for one patient based on their ID
 @app.route('/patients/<id>', methods = ['GET'])
-def get_patient(id):
+@token_required
+def get_patient(current_user_id):
     patient = Patient.query.get(id)
     results = patient_schema.dump(patient)
     return jsonify(results)
 
 # Endpoint for updating patient data
 @app.route('/patients/update/<id>', methods = ['POST' , 'PUT'])
+@token_required
 def update_patient(id):
     patient = Patient.query.get(id)
 
     # Update info below
-    patient.name = request.json['Olivia_Davies']
-    patient.gender = request.json['F']
-    patient.address = request.json['124 Main Street, Chicago, IL 60606']
-    patient.ssn = request.json['423-65-8754']
-    patient.blood_type = request.json['O+']
-    patient.email = request.json['oliviadavies@gmail.com']
+    patient.name = request.json['full_name']
+    patient.gender = request.json['gender']
+    patient.address = request.json['address']
+    patient.ssn = request.json['ssn']
+    patient.blood_type = request.json['blood_type']
+    patient.email = request.json['email']
 
     db.session.commit()
 
     return patient_schema.jsonify(patient)
 
-
-
 # Endpoint for deleting patient data
 @app.route('/patients/delete/<id>', methods = ['DELETE'])
-def delete_patient(id):
+@token_required
+def delete_patient(current_user_token,id):
     patient = Patient.query.get(id)
 
     db.session.delete(patient)
@@ -86,13 +91,13 @@ def register():
         user = User(name,email,password)
 
         db.session.add(user)
-        deb.session.commit()
+        db.session.commit()
 
         return redirect(url_for('login'))
     return render_template('register.html', user_form = form)
        
 
-@app.route('/users/login', methods = ['GET','POST'])
+@app.route('/users/login', methods = ['GET' , 'POST'])
 def login():
     form = LoginForm()
     email = form.email.data 
@@ -107,10 +112,26 @@ def login():
 @app.route('/users/getkey', methods = ['GET'])
 def get_key():
     token = jwt.encode({'public_id': current_user.id, 'email':current_user.email}, app.config['SECRET_KEY'])
-    user = User.query.filter_by(email = current_user.enail).first()
+    user = User.query.filter_by(email = current_user.email).first()
     user.token = token
     
     db.session.add(user)
     db.session.commit()
     results = token.decode('utf-8')
     return render_template('token.html', token = results)
+
+# Get a new API Key
+@app.route('/users/updatekey', methods = ['GET', 'POST', 'PUT'])
+def refresh_key():
+    refresh_key = {'refreshToken': jwt.encode({'public_id':current_user.id, 'email': current_user.email}, app.config['SECRET_KEY'])}
+    temp = refresh_key.get('refreshToken')
+    new_token = temp.decode('utf-8')
+
+    # Adding Refreshed Token to DB
+    user = User.query.filter_by(email = current_user.email).first()
+    user.token = new_token
+
+    db.session.add(user)
+    db.session.commit()
+
+    return render_template('token_refresh.html', new_token = new_token)

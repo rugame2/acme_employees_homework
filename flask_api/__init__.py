@@ -9,8 +9,8 @@ app = Flask(__name__)
 app.config.from_object(Config)
 
 db = SQLAlchemy(app) # Ingest Data via models
-migrate = Migrate(app,db) # Ingest Data via models
-ma = Marshmallow(app) # Digest Data from our models
+migrate = Migrate(app,db)  # Ingest Data via models
+ma = Marshmallow(app)   # Digest Data from our models
 
 login_manager = LoginManager(app)
 
